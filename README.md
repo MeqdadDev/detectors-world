@@ -39,9 +39,9 @@ Install detectors world package with pip
 ```
 
 
-## Run Detectors
+## Run Detectors 🚀🚀
 
-### Hand Detector
+## Hand Detector ✋
 
 <p align="center">
 <img src="assets/hand-detector.gif" width=50% height=40%>
@@ -85,6 +85,104 @@ while True:
     cv.imshow("Hand Detection", img)
     cv.waitKey(1)
 ```
+
+### Pose Detector 💪
+
+<p align="center">
+<img src="assets/pose-detection.gif" width=50% height=40%>
+</p>
+
+Pose detector examples with OpenCV:
+
+#### Example 1:
+
+```python
+from detectors_world import DetectorCreator
+import cv2 as cv
+
+cap = cv.VideoCapture(0)
+
+creator = DetectorCreator()
+pose = creator.getDetector("pose")
+
+while True:
+    status, img = cap.read()
+    pose.detect(img, drawOnPose=True)
+    cv.imshow("Pose Detection", img)
+    cv.waitKey(1)
+```
+
+### Face Detector 😃
+
+<p align="center">
+<img src="assets/face-detection.gif" width=50% height=40%>
+</p>
+
+Face detector examples with OpenCV:
+
+#### Example 1:
+
+```python
+from detectors_world import DetectorCreator
+import cv2 as cv
+
+cap = cv.VideoCapture(0)
+
+creator = DetectorCreator()
+face = creator.getDetector("face")
+
+while True:
+    status, img = cap.read()
+    face.detect(img, drawOnFace=True)
+    cv.imshow("Face Detection", img)
+    cv.waitKey(1)
+```
+
+#### Example 2:
+
+```python
+from detectors_world import DetectorCreator
+import cv2 as cv
+
+cap = cv.VideoCapture(0)
+
+creator = DetectorCreator()
+face = creator.getDetector("face")
+
+while True:
+    status, img = cap.read()
+    face.detect(img, drawOnFace=False)
+    landmarks = face.locate(img, drawOnFace=True)
+    cv.imshow("Face Detection", img)
+    cv.waitKey(1)
+```
+
+### Face Mesh Detector 🤖
+
+<p align="center">
+<img src="assets/facemesh-detection.gif" width=50% height=40%>
+</p>
+
+Face mesh detector examples with OpenCV:
+
+#### Example 1:
+
+```python
+from detectors_world import DetectorCreator
+import cv2 as cv
+
+cap = cv.VideoCapture(0)
+
+creator = DetectorCreator()
+facemesh = creator.getDetector("face_mesh")
+
+while True:
+    status, img = cap.read()
+    facemesh.detect(img, drawOnFace=True)
+    cv.imshow("Facemesh Detection", img)
+    cv.waitKey(1)
+```
+
 
 ## Contributing
 
