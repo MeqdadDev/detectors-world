@@ -1,6 +1,7 @@
 # Detectors World
-[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
+[![PyPI](https://img.shields.io/pypi/v/detectors-world)](https://pypi.org/project/detectors-world/)
 [![Downloads](https://static.pepy.tech/badge/detectors-world)](https://pepy.tech/project/detectors-world)
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
 
 Detectors World is a Python package created for building Computer Vision applications in easy and handy way.
 
