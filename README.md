@@ -28,8 +28,8 @@ The complete documentation will be added soon....
 Detectors World dependencies are:
 
 ```bash
-  opencv-python
-  mediapipe
+opencv-python
+mediapipe
 ```
 
 ## Installation
@@ -37,7 +37,7 @@ Detectors World dependencies are:
 Install detectors world package with pip
 
 ```bash
-  pip install detectors_world
+pip install detectors_world
 ```
 
 
