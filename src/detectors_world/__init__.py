@@ -62,7 +62,7 @@ def create_detector(kind: str, **options: Any) -> Detector:
     Args:
         kind: ``"hand"``, ``"pose"``, ``"face"`` or ``"face_mesh"``.
         **options: Passed to the detector class, for example ``max_hands=1``.
-            See :class:`Hand`, :class:`Pose`, :class:`Face` and :class:`FaceMesh`.
+            See ``Hand``, ``Pose``, ``Face`` and ``FaceMesh``.
 
     Raises:
         ValueError: If ``kind`` is not a known detector.
@@ -74,7 +74,7 @@ def create_detector(kind: str, **options: Any) -> Detector:
 
 
 class DetectorCreator:
-    """Deprecated: use :func:`create_detector` instead. Kept so 0.x code keeps running."""
+    """Deprecated: use ``create_detector`` instead. Kept so 0.x code keeps running."""
 
     def __init__(self) -> None:
         warnings.warn(

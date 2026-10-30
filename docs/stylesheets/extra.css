@@ -1,0 +1,90 @@
+:root,
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #0d3934;
+  --md-primary-fg-color--light: #2b524d;
+  --md-primary-fg-color--dark: #082825;
+  --md-accent-fg-color: #0e8f7e;
+  --md-accent-fg-color--transparent: rgba(14, 143, 126, 0.1);
+  --md-typeset-a-color: #0b7466;
+}
+
+[data-md-color-scheme="slate"] {
+  --md-accent-fg-color: #4fd1bd;
+  --md-accent-fg-color--transparent: rgba(79, 209, 189, 0.1);
+  --md-accent-bg-color: #0d3934;
+  --md-typeset-a-color: #4fd1bd;
+}
+
+[data-md-color-scheme="slate"] .md-typeset {
+  --md-primary-fg-color: var(--md-accent-fg-color);
+  --md-primary-bg-color: #0d3934;
+}
+
+.md-typeset h1.dw-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+.dw-hero {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.dw-hero img {
+  width: 340px;
+  max-width: 100%;
+  border-radius: 12px;
+}
+
+.dw-hero p {
+  font-size: 1.05rem;
+}
+
+.md-typeset .dw-demo {
+  display: block;
+  margin: 1rem auto;
+  width: 380px;
+  max-width: 100%;
+  border-radius: 8px;
+}
+
+.md-typeset .dw-map {
+  display: block;
+  margin: 1rem auto;
+  max-width: 100%;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 14px;
+}
+
+.md-typeset .dw-map--hand {
+  width: 520px;
+}
+
+.md-typeset .dw-map--pose {
+  width: 720px;
+}
+
+.md-typeset .dw-map--face {
+  width: 380px;
+}
+
+.md-typeset .dw-map--mesh {
+  width: 760px;
+}
+
+.md-typeset .grid.cards {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+}
+
+.md-typeset .grid.cards .dw-demo {
+  width: 100%;
+  margin: 0.4rem 0;
+}
+
+.md-typeset table:not([class]) {
+  font-size: 0.72rem;
+}

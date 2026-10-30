@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented here. The project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- A documentation website with guides, an API reference and landmark maps for every detector.
+- New examples: photo detection, video file processing, pinch distance, face blur, exercise counter and blink counter.
+
+### Changed
+- The finger counter example now counts the thumb.
+
 ## [1.0.0] - 2026-10-30
 
 The package works again with current MediaPipe releases. Recent MediaPipe releases removed the
