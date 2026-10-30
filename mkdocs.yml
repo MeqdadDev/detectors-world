@@ -1,0 +1,137 @@
+site_name: Detectors World
+site_description: Hand, pose, face and face mesh detection for computer vision projects, in a few lines of Python.
+site_url: https://meqdaddev.github.io/detectors-world/
+site_author: Meqdad Darwish
+repo_url: https://github.com/MeqdadDev/detectors-world
+repo_name: MeqdadDev/detectors-world
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; Meqdad Darwish
+
+theme:
+  name: material
+  logo: assets/logo-white.png
+  favicon: assets/favicon.png
+  font:
+    text: Inter
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - content.action.edit
+    - content.code.copy
+    - navigation.footer
+    - navigation.indexes
+    - navigation.instant
+    - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - search.highlight
+    - toc.follow
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/MeqdadDev
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/detectors-world/
+    - icon: fontawesome/brands/linkedin
+      link: https://www.linkedin.com/in/meqdad-darwish/
+    - icon: fontawesome/brands/x-twitter
+      link: https://twitter.com/MeqdadDev
+    - icon: fontawesome/brands/instagram
+      link: https://www.instagram.com/meqdad.dev/
+    - icon: fontawesome/solid/globe
+      link: https://meqdaddev.github.io/
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            docstring_options:
+              returns_named_value: false
+            filters: ["!^_"]
+            members_order: source
+            merge_init_into_class: true
+            separate_signature: true
+            show_overloads: false
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: true
+            show_source: false
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            signature_crossrefs: true
+
+markdown_extensions:
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight
+  - pymdownx.keys
+  - pymdownx.snippets:
+      check_paths: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+      - Installation: getting-started/installation.md
+      - Quick Start: getting-started/quickstart.md
+      - Core Concepts: getting-started/concepts.md
+  - Detectors:
+      - detectors/index.md
+      - Hand: detectors/hand.md
+      - Pose: detectors/pose.md
+      - Face: detectors/face.md
+      - Face Mesh: detectors/face-mesh.md
+  - Guides:
+      - Drawing: guides/drawing.md
+      - Photos and Video Files: guides/images-and-video.md
+      - Models and Offline Use: guides/models.md
+      - Speed and Accuracy: guides/performance.md
+      - Troubleshooting: guides/troubleshooting.md
+      - Upgrading from 0.x: guides/upgrading.md
+  - Examples:
+      - examples/index.md
+      - Webcam Viewer: examples/webcam.md
+      - Photo Detection: examples/photo.md
+      - Video File Processing: examples/video.md
+      - Finger Counter: examples/finger-counter.md
+      - Pinch Distance: examples/pinch-distance.md
+      - Face Blur: examples/face-blur.md
+      - Exercise Counter: examples/exercise-counter.md
+      - Blink Counter: examples/blink-counter.md
+  - Reference:
+      - Landmark Maps: reference/landmarks.md
+      - API: reference/api.md
+  - Project:
+      - Changelog: project/changelog.md
+      - Contributing: project/contributing.md
+      - Releasing: project/releasing.md

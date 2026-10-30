@@ -135,7 +135,7 @@ class Detector(ABC):
     """Base class for all detectors.
 
     Detectors hold a loaded model. Use them as a context manager, or call
-    :meth:`close` when you are done, to release it.
+    ``close()`` when you are done, to release it.
     """
 
     _last: list[Any] | None = None
@@ -158,7 +158,7 @@ class Detector(ABC):
 
     @abstractmethod
     def locate(self, frame: np.ndarray) -> list[Any]:
-        """Return pixel positions from the latest :meth:`detect` call."""
+        """Return pixel positions from the latest ``detect()`` call."""
 
     def _run(self, frame: np.ndarray) -> Any:
         if self._closed:
@@ -265,7 +265,7 @@ class Hand(_LandmarkDetector):
         """Find hands in ``frame`` and optionally draw them on it.
 
         Returns:
-            One :class:`Landmarks` per hand, with ``label`` set to ``"Left"`` or ``"Right"``.
+            One ``Landmarks`` per hand, with ``label`` set to ``"Left"`` or ``"Right"``.
             An empty list when no hand is visible. Labels name the person's own hands,
             and MediaPipe swaps them on a mirrored frame such as ``cv.flip(frame, 1)``.
         """
@@ -295,7 +295,7 @@ class Hand(_LandmarkDetector):
         color: Color = (0, 255, 0),
         radius: int = 6,
     ) -> list[list[int]]:
-        """Pixel positions of one hand's landmarks from the latest :meth:`detect` call.
+        """Pixel positions of one hand's landmarks from the latest ``detect()`` call.
 
         Args:
             frame: The image to draw on.
@@ -373,7 +373,7 @@ class Pose(_LandmarkDetector):
         """Find bodies in ``frame`` and optionally draw them on it.
 
         Returns:
-            One :class:`Landmarks` per body, or an empty list when nobody is visible.
+            One ``Landmarks`` per body, or an empty list when nobody is visible.
         """
         result = self._run(frame)
         self._last = [_to_landmarks(lms, frame.shape) for lms in result.pose_landmarks]
@@ -391,7 +391,7 @@ class Pose(_LandmarkDetector):
         color: Color = (0, 255, 0),
         radius: int = 6,
     ) -> list[list[int]]:
-        """Pixel positions of one body's landmarks from the latest :meth:`detect` call.
+        """Pixel positions of one body's landmarks from the latest ``detect()`` call.
 
         Returns:
             ``[[id, x, y], ...]`` for the 33 landmarks, or ``[]`` if nobody is visible.
@@ -472,7 +472,7 @@ class FaceMesh(_LandmarkDetector):
             radius: Landmark ring radius in pixels.
 
         Returns:
-            One :class:`Landmarks` per face, or an empty list when no face is visible.
+            One ``Landmarks`` per face, or an empty list when no face is visible.
         """
         result = self._run(frame)
         self._last = [_to_landmarks(lms, frame.shape) for lms in result.face_landmarks]
@@ -493,7 +493,7 @@ class FaceMesh(_LandmarkDetector):
         color: Color = (0, 255, 0),
         radius: int = 1,
     ) -> list[list[int]]:
-        """Pixel positions of one face's landmarks from the latest :meth:`detect` call.
+        """Pixel positions of one face's landmarks from the latest ``detect()`` call.
 
         Args:
             frame: The image to draw on.
@@ -547,7 +547,7 @@ class Face(Detector):
         """Find faces in ``frame`` and optionally draw a box and key points on each.
 
         Returns:
-            One :class:`FaceBox` per face, or an empty list when no face is visible.
+            One ``FaceBox`` per face, or an empty list when no face is visible.
         """
         result = self._run(frame)
         self._last = [
@@ -569,7 +569,7 @@ class Face(Detector):
 
     @_accepts_legacy({"drawOnFace": "draw", "drawingColor": "color"})
     def locate(self, frame: np.ndarray, *, draw: bool = True, color: Color = (0, 255, 0)) -> list[list[Any]]:
-        """Face boxes from the latest :meth:`detect` call.
+        """Face boxes from the latest ``detect()`` call.
 
         Args:
             frame: The image to draw on.

@@ -3,6 +3,7 @@
 [![Python](https://img.shields.io/pypi/pyversions/detectors-world)](https://pypi.org/project/detectors-world/)
 [![Tests](https://github.com/MeqdadDev/detectors-world/actions/workflows/tests.yml/badge.svg)](https://github.com/MeqdadDev/detectors-world/actions/workflows/tests.yml)
 [![Downloads](https://static.pepy.tech/badge/detectors-world)](https://pepy.tech/project/detectors-world)
+[![Docs](https://img.shields.io/badge/docs-website-0d3934)](https://meqdaddev.github.io/detectors-world/)
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
 
 <p align="center">
@@ -13,6 +14,8 @@ Detectors World is a Python package for building computer vision applications in
 It wraps Google's [MediaPipe](https://ai.google.dev/edge/mediapipe) models behind a small, friendly API that works directly with OpenCV images.
 
 Developed by [@MeqdadDev](https://www.github.com/MeqdadDev)
+
+**Read the full documentation at [meqdaddev.github.io/detectors-world](https://meqdaddev.github.io/detectors-world/).**
 
 ## Available Detectors
 
@@ -91,7 +94,7 @@ for h in hands:
 landmarks = hand.locate(frame, hand=0)  # [[id, x, y], ...] for the first hand, [] if none
 ```
 
-Landmark numbers follow MediaPipe's [hand landmark map](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker#models): 0 is the wrist, 4 the thumb tip, 8 the index fingertip, and so on.
+Landmark numbers follow the [hand landmark map](https://meqdaddev.github.io/detectors-world/detectors/hand/#landmark-map): 0 is the wrist, 4 the thumb tip, 8 the index fingertip, and so on.
 See [examples/finger_counter.py](https://github.com/MeqdadDev/detectors-world/blob/main/examples/finger_counter.py) for a complete program that uses them.
 
 ## Pose Detector 💪

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 510" role="img" aria-label="Face key point map with ids 0 to 5" font-family="Inter, Segoe UI, Helvetica, Arial, sans-serif">
+<title>Face key point map with ids 0 to 5</title>
+<rect width="480" height="510" rx="14" fill="#ffffff"/>
+<ellipse cx="240" cy="270" rx="172" ry="212" fill="#dfe9e7"/>
+<circle cx="170" cy="210" r="15" fill="#0d3934" stroke="#ffffff" stroke-width="2"/><text x="170" y="215" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">0</text>
+<text x="170" y="244" font-size="15" fill="#0d3934" text-anchor="middle" font-weight="400">Right eye</text>
+<circle cx="310" cy="210" r="15" fill="#0d3934" stroke="#ffffff" stroke-width="2"/><text x="310" y="215" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">1</text>
+<text x="310" y="244" font-size="15" fill="#0d3934" text-anchor="middle" font-weight="400">Left eye</text>
+<circle cx="240" cy="285" r="15" fill="#0d3934" stroke="#ffffff" stroke-width="2"/><text x="240" y="290" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">2</text>
+<text x="240" y="319" font-size="15" fill="#0d3934" text-anchor="middle" font-weight="400">Nose tip</text>
+<circle cx="240" cy="365" r="15" fill="#0d3934" stroke="#ffffff" stroke-width="2"/><text x="240" y="370" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">3</text>
+<text x="240" y="399" font-size="15" fill="#0d3934" text-anchor="middle" font-weight="400">Mouth center</text>
+<circle cx="62" cy="245" r="15" fill="#0d3934" stroke="#ffffff" stroke-width="2"/><text x="62" y="250" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">4</text>
+<text x="62" y="279" font-size="15" fill="#0d3934" text-anchor="middle" font-weight="400">Right ear tragion</text>
+<circle cx="418" cy="245" r="15" fill="#0d3934" stroke="#ffffff" stroke-width="2"/><text x="418" y="250" font-size="13" fill="#ffffff" text-anchor="middle" font-weight="700">5</text>
+<text x="418" y="279" font-size="15" fill="#0d3934" text-anchor="middle" font-weight="400">Left ear tragion</text>
+</svg>

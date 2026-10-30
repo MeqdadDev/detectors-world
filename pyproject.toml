@@ -40,8 +40,12 @@ classifiers = [
 [project.optional-dependencies]
 test = ["pytest>=8"]
 
+[dependency-groups]
+docs = ["mkdocs-material>=9.6,<10", "mkdocstrings[python]>=0.30"]
+
 [project.urls]
-Homepage = "https://github.com/MeqdadDev/detectors-world"
+Homepage = "https://meqdaddev.github.io/detectors-world/"
+Documentation = "https://meqdaddev.github.io/detectors-world/"
 Source = "https://github.com/MeqdadDev/detectors-world"
 Issues = "https://github.com/MeqdadDev/detectors-world/issues"
 Changelog = "https://github.com/MeqdadDev/detectors-world/blob/main/CHANGELOG.md"
