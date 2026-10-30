@@ -20,7 +20,7 @@ from ._models import cache_dir
 from .detectors import Detector, Face, FaceMesh, Hand, Pose
 from .results import FaceBox, Landmarks
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __author__ = "Meqdad Darwish"
 
 __all__ = [
