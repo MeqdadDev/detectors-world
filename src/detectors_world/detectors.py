@@ -455,9 +455,17 @@ class FaceMesh(_LandmarkDetector):
         draw: bool = True,
         color: Color = (224, 224, 224),
         thickness: int = 1,
+        radius: int = 2,
         **legacy: Any,
     ) -> list[Landmarks]:
-        """Find faces in ``frame`` and optionally draw their outlines (eyes, brows, lips, face oval).
+        """Find faces in ``frame`` and optionally draw the mesh on them.
+
+        Args:
+            frame: A BGR image from OpenCV.
+            draw: Draw a ring on each landmark and the face outlines (eyes, brows, lips, face oval).
+            color: Drawing color in BGR.
+            thickness: Line thickness in pixels.
+            radius: Landmark ring radius in pixels.
 
         Returns:
             One :class:`Landmarks` per face, or an empty list when no face is visible.
@@ -468,18 +476,21 @@ class FaceMesh(_LandmarkDetector):
                 "drawOnFace": "draw",
                 "drawingColor": "color",
                 "drawingThickness": "thickness",
-                "drawingCircleRadius": None,
+                "drawingCircleRadius": "radius",
             },
             "FaceMesh.detect",
         )
         draw = options.get("draw", draw)
         color = options.get("color", color)
         thickness = options.get("thickness", thickness)
+        radius = options.get("radius", radius)
         result = self._run(frame)
         self._last = [_to_landmarks(lms, frame.shape) for lms in result.face_landmarks]
         if draw:
             for face in self._last:
                 _draw_skeleton(frame, face.points, self._connections, color, None, thickness, 0)
+                for point in face.points:
+                    cv.circle(frame, point, radius, color, thickness, cv.LINE_AA)
         return self._last
 
     def locate(

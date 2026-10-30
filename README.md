@@ -30,7 +30,9 @@ pip install detectors-world
 ```
 
 Requires Python 3.10 or newer on Windows, Linux, or macOS (Apple Silicon).
-Models are downloaded automatically the first time each detector is created and cached for later runs.
+Models are downloaded automatically the first time each detector is created and cached for later runs, so the first run needs an internet connection.
+
+MediaPipe prints a few `INFO` and `WARNING` lines when a model loads. These are normal and can be ignored.
 
 ## Quick Start
 
@@ -56,10 +58,19 @@ cv.destroyAllWindows()
 
 Using the detector in a `with` block releases the model when you are done. You can also call `hand.close()` yourself.
 
+## Using the Results
+
+`detect()` draws on the frame by default and returns a list with one item per hand, body, or face. The list is empty when nothing is found, so `if hands:` is all you need to check.
+
+- **`Landmarks`** (hand, pose, face mesh): `points` holds `(x, y)` pixel positions, and `normalized` holds `(x, y, z)` values relative to the image size. For hands, `label` is `"Left"` or `"Right"` and `score` is its confidence. You can also index it directly: `hands[0][8]` is the same as `hands[0].points[8]`.
+- **`FaceBox`** (face): `x`, `y`, `width`, `height`, `score` and `keypoints`, plus `box` for `(x, y, width, height)`.
+
+`locate()` reuses the latest `detect()` result, draws markers, and returns plain lists such as `[[id, x, y], ...]`. It returns `[]` when nothing is found.
+
 ## Hand Detector ✋
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/MeqdadDev/detectors-world/main/assets/hand-detector.gif" width="50%">
+<img alt="Hand landmarks drawn on a moving hand" src="https://raw.githubusercontent.com/MeqdadDev/detectors-world/main/assets/hand-detector.gif" width="380">
 </p>
 
 ```python
@@ -73,12 +84,12 @@ landmarks = hand.locate(frame, hand=0)  # [[id, x, y], ...] for the first hand, 
 ```
 
 Landmark numbers follow MediaPipe's [hand landmark map](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker#models): 0 is the wrist, 4 the thumb tip, 8 the index fingertip, and so on.
-See [examples/finger_counter.py](examples/finger_counter.py) for a complete program that uses them.
+See [examples/finger_counter.py](https://github.com/MeqdadDev/detectors-world/blob/main/examples/finger_counter.py) for a complete program that uses them.
 
 ## Pose Detector 💪
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/MeqdadDev/detectors-world/main/assets/pose-detection.gif" width="50%">
+<img alt="Body landmarks drawn on a person running" src="https://raw.githubusercontent.com/MeqdadDev/detectors-world/main/assets/pose-detection.gif" width="380">
 </p>
 
 ```python
@@ -91,7 +102,7 @@ landmarks = pose.locate(frame)  # [[id, x, y], ...] for 33 body landmarks
 ## Face Detector 😃
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/MeqdadDev/detectors-world/main/assets/face-detection.gif" width="50%">
+<img alt="A framed box and confidence score around a detected face" src="https://raw.githubusercontent.com/MeqdadDev/detectors-world/main/assets/face-detection.gif" width="380">
 </p>
 
 ```python
@@ -107,15 +118,17 @@ boxes = face.locate(frame)  # draws framed boxes with the score: [[id, (x, y, w,
 ## Face Mesh Detector 🤖
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/MeqdadDev/detectors-world/main/assets/facemesh-detection.gif" width="50%">
+<img alt="Face mesh landmarks drawn on a face" src="https://raw.githubusercontent.com/MeqdadDev/detectors-world/main/assets/facemesh-detection.gif" width="380">
 </p>
 
 ```python
 face_mesh = create_detector("face_mesh", max_faces=1)
 
-faces = face_mesh.detect(frame)  # draws eyes, brows, lips and face outline
+faces = face_mesh.detect(frame)  # draws the landmarks and the eye, brow, lip and face outlines
 landmarks = face_mesh.locate(frame, show_ids=True)  # writes each landmark's number on the frame
 ```
+
+Unlike the other detectors, `face_mesh.locate()` only draws when you ask it to (`draw=True` or `show_ids=True`), because 478 markers would cover the face.
 
 ## Options
 
@@ -128,12 +141,23 @@ Every detector accepts these options in `create_detector()`:
 | `static_image` | `False` | Set to `True` when processing unrelated photos instead of video frames |
 | `model_path` | `None` | Use a model file you already downloaded, for offline use |
 
+Some options apply to one detector:
+
+| Detector | Option | Default | Meaning |
+|---|---|---|---|
+| `"hand"` | `max_hands` | `2` | Largest number of hands to look for |
+| `"pose"` | `max_poses` | `1` | Largest number of people to look for |
+| `"pose"` | `model` | `"lite"` | `"lite"` is fastest, `"heavy"` is most accurate |
+| `"face_mesh"` | `max_faces` | `2` | Largest number of faces to look for |
+
 `detect()` and `locate()` take `draw=False` to skip drawing, and `color=(b, g, r)` to change the drawing color.
 
 Downloaded models are stored in `%LOCALAPPDATA%\detectors_world` on Windows and `~/.cache/detectors_world` elsewhere.
 Set the `DETECTORS_WORLD_CACHE` environment variable to use another folder.
 
 ## Examples
+
+Runnable scripts are in the [`examples` folder](https://github.com/MeqdadDev/detectors-world/tree/main/examples) of this repository. From a copy of the repository:
 
 ```bash
 python examples/webcam.py hand
@@ -152,9 +176,18 @@ Code written for 0.x keeps working and shows a `DeprecationWarning` that names t
 | `handsMax=`, `facesMax=` | `max_hands=`, `max_faces=` |
 | `detectionConfidence=`, `trackingConfidence=` | `detection_confidence=`, `tracking_confidence=` |
 | `drawingColor=`, `drawingSize=` | `color=`, `radius=` |
+| `drawingThickness=`, `drawingCircleRadius=` | `thickness=`, `radius=` |
 | `locate(..., handsNumber=1)` (counts from 1) | `locate(..., hand=0)` (counts from 0) |
 
-The old names will be removed in 2.0. See [CHANGELOG.md](CHANGELOG.md) for the full list of changes.
+The old names will be removed in 2.0.
+
+A few results changed shape, so check code that uses them:
+
+- `detect()` now returns the results instead of the frame. It still draws on the frame you pass in.
+- `face.locate()` always returns the list of boxes, not `(frame, boxes)`.
+- `face_mesh.locate()` returns one face's `[[id, x, y], ...]`, not `(frame, faces)`.
+
+See the [changelog](https://github.com/MeqdadDev/detectors-world/blob/main/CHANGELOG.md) for the full list of changes.
 
 ## Contributing
 

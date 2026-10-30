@@ -66,6 +66,17 @@ def test_face_mesh_detects_478_landmarks(image):
         assert len(faces[0]) == 478
 
 
+def test_face_mesh_draws_rings_on_landmarks_outside_the_contours(image):
+    nose_tip = 1
+    frame = image("person")
+    with FaceMesh(static_image=True) as mesh:
+        drawn = frame.copy()
+        x, y = mesh.detect(drawn, color=(255, 0, 255), radius=3)[0][nose_tip]
+    ring = drawn[y - 4 : y + 5, x - 4 : x + 5].astype(int)
+    # Rings are anti-aliased, so pixels get close to the color without matching it exactly.
+    assert np.abs(ring - (255, 0, 255)).sum(axis=2).min() < 30
+
+
 @pytest.mark.parametrize("cls", [Hand, Pose, Face, FaceMesh])
 def test_nothing_found_on_blank_frame(cls, blank):
     with cls() as detector:
