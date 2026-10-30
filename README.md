@@ -34,6 +34,12 @@ Models are downloaded automatically the first time each detector is created and 
 
 MediaPipe prints a few `INFO` and `WARNING` lines when a model loads. These are normal and can be ignored.
 
+On Linux systems without a desktop, such as servers and Docker containers, MediaPipe also needs the OpenGL system libraries. If you see `libGLESv2.so.2: cannot open shared object file`, install them on Debian or Ubuntu with:
+
+```bash
+sudo apt install libgl1 libegl1 libgles2
+```
+
 ## Quick Start
 
 ```python

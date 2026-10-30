@@ -28,9 +28,9 @@ jobs:
           python-version: ${{ matrix.python }}
           cache: pip
           cache-dependency-path: pyproject.toml
-      - name: Install OpenGL runtime for OpenCV
+      - name: Install OpenGL libraries for OpenCV and MediaPipe
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libgl1 libegl1
+        run: sudo apt-get update && sudo apt-get install -y libgl1 libegl1 libgles2
       - uses: actions/cache@v4
         with:
           path: |
