@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. The project follows [Semantic Versioning](https://semver.org/).
 
-## [1.0.0] - Unreleased
+## [1.0.0] - 2026-10-30
 
 The package works again with current MediaPipe releases. Recent MediaPipe releases removed the
 `mediapipe.solutions` API that 0.x was built on, so a fresh `pip install detectors-world` failed with
