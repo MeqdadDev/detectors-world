@@ -1,23 +1,14 @@
 import hashlib
 import http.client
 import io
-import shutil
 import urllib.error
 
 import pytest
 
-from detectors_world import Hand, _models, cache_dir
+from detectors_world import Hand, _models
 
 NAME = "hand_landmarker.task"
 GOOD = b"good model"
-
-
-class FakeResponse(io.BytesIO):
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *exc_info):
-        self.close()
 
 
 @pytest.fixture
@@ -29,10 +20,18 @@ def model_store(monkeypatch, tmp_path):
 
     def urlopen(url, timeout):
         requests.append(url)
-        return FakeResponse(GOOD)
+        return io.BytesIO(GOOD)
 
     monkeypatch.setattr(_models.urllib.request, "urlopen", urlopen)
     return requests
+
+
+@pytest.fixture
+def non_ascii_model_dir(tmp_path):
+    folder = tmp_path / "مستخدم"
+    folder.mkdir()
+    (folder / NAME).write_bytes(_models.load_model(NAME))
+    return folder
 
 
 def test_download_is_cached(model_store, tmp_path):
@@ -49,7 +48,7 @@ def test_damaged_cached_file_is_replaced(model_store, tmp_path):
 
 
 def test_damaged_download_is_not_cached(model_store, monkeypatch, tmp_path):
-    monkeypatch.setattr(_models.urllib.request, "urlopen", lambda url, timeout: FakeResponse(b"bad"))
+    monkeypatch.setattr(_models.urllib.request, "urlopen", lambda url, timeout: io.BytesIO(b"bad"))
     with pytest.raises(RuntimeError, match="damaged or incomplete"):
         _models.load_model(NAME)
     assert list(tmp_path.iterdir()) == []
@@ -83,20 +82,12 @@ def test_model_urls_are_pinned():
     assert all("/latest/" not in path and len(digest) == 64 for path, digest in _models.MODELS.values())
 
 
-def test_model_in_a_folder_with_non_ascii_name(image, tmp_path):
-    Hand().close()
-    folder = tmp_path / "مستخدم"
-    folder.mkdir()
-    shutil.copy(cache_dir() / NAME, folder / NAME)
-    with Hand(static_image=True, model_path=folder / NAME) as hand:
+def test_model_in_a_folder_with_non_ascii_name(image, non_ascii_model_dir):
+    with Hand(static_image=True, model_path=non_ascii_model_dir / NAME) as hand:
         assert len(hand.detect(image("hands"), draw=False)) == 2
 
 
-def test_cache_in_a_folder_with_non_ascii_name(image, monkeypatch, tmp_path):
-    Hand().close()
-    folder = tmp_path / "مستخدم"
-    folder.mkdir()
-    shutil.copy(cache_dir() / NAME, folder / NAME)
-    monkeypatch.setenv("DETECTORS_WORLD_CACHE", str(folder))
+def test_cache_in_a_folder_with_non_ascii_name(image, monkeypatch, non_ascii_model_dir):
+    monkeypatch.setenv("DETECTORS_WORLD_CACHE", str(non_ascii_model_dir))
     with Hand(static_image=True) as hand:
         assert len(hand.detect(image("hands"), draw=False)) == 2

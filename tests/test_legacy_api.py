@@ -62,6 +62,13 @@ def test_source_frame_keyword_still_works(image):
         assert len(hand.detect(sourceFrame=image("hands"), drawOnHand=False)) == 2
 
 
+def test_source_frame_keyword_works_on_face_mesh_locate(image):
+    frame = image("person")
+    with FaceMesh(static_image=True) as mesh, pytest.deprecated_call(match="'sourceFrame' is deprecated"):
+        mesh.detect(frame, draw=False)
+        assert len(mesh.locate(sourceFrame=frame)) == 478
+
+
 def test_too_many_positional_arguments_is_a_type_error(blank):
     with Hand() as hand, pytest.raises(TypeError, match="too many positional"):
         hand.detect(blank, True, True)

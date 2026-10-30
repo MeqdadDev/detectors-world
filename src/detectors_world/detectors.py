@@ -43,28 +43,27 @@ def _deprecated(old: str, new: str, note: str = "") -> str:
     return f"'{old}' is deprecated, use '{new}' instead{detail}. It will be removed in detectors_world 2.0."
 
 
-def _accepts_legacy(names: Mapping[str, _LegacyRule], *, takes_frame: bool = True) -> Callable[[_F], _F]:
+def _accepts_legacy(names: Mapping[str, _LegacyRule]) -> Callable[[_F], _F]:
     """Accept 0.x keyword and positional arguments, translating them with a DeprecationWarning.
 
     Args:
         names: Each 0.x parameter, in its 0.x positional order, mapped to its new
             name, to a ``_Renamed`` rule, or to ``None`` if it no longer has an effect.
-        takes_frame: The method's first parameter is the frame, ``sourceFrame`` in 0.x.
     """
 
     def decorate(func: _F) -> _F:
-        leading = 1 if takes_frame else 0
+        leading = func.__code__.co_argcount - 1
 
         @functools.wraps(func)
         def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
-            if takes_frame and "sourceFrame" in kwargs:
+            if leading and "sourceFrame" in kwargs:
                 warnings.warn(_deprecated("sourceFrame", "frame"), DeprecationWarning, stacklevel=2)
                 args = (kwargs.pop("sourceFrame"), *args)
             extra = args[leading:]
             if len(extra) > len(names):
                 raise TypeError(f"{func.__qualname__}() got too many positional arguments")
             supplied = dict(zip(names, extra))
-            supplied.update({old: kwargs.pop(old) for old in list(kwargs) if old in names})
+            supplied.update({old: kwargs.pop(old) for old in names if old in kwargs})
             for old, value in supplied.items():
                 rule = names[old]
                 if rule is None:
@@ -89,7 +88,8 @@ def _to_rgb(frame: np.ndarray) -> np.ndarray:
             "frame is None. If it came from cv.VideoCapture.read(), the camera returned no image: "
             "check the camera index and that no other program is using the camera."
         )
-    frame = np.asarray(frame)
+    if not isinstance(frame, np.ndarray):
+        raise TypeError(f"frame must be a NumPy array from OpenCV, got {type(frame).__name__}.")
     if frame.dtype != np.uint8:
         raise ValueError(f"frame must be an 8-bit image (dtype uint8), got dtype {frame.dtype}.")
     if frame.ndim == 2:
@@ -101,40 +101,34 @@ def _to_rgb(frame: np.ndarray) -> np.ndarray:
     raise ValueError(f"frame must be a grayscale, BGR or BGRA image, got shape {frame.shape}.")
 
 
+def _to_pixels(points: Iterable[Any], shape: tuple[int, ...]) -> tuple[tuple[int, int], ...]:
+    height, width = shape[:2]
+    return tuple((int(point.x * width), int(point.y * height)) for point in points)
+
+
 def _to_landmarks(
     landmarks: Sequence[Any], shape: tuple[int, ...], label: str | None = None, score: float | None = None
 ) -> Landmarks:
-    height, width = shape[:2]
     return Landmarks(
-        points=tuple((int(lm.x * width), int(lm.y * height)) for lm in landmarks),
+        points=_to_pixels(landmarks, shape),
         normalized=tuple((lm.x, lm.y, lm.z) for lm in landmarks),
         label=label,
         score=score,
     )
 
 
-def _draw_skeleton(
-    frame: np.ndarray,
-    points: Sequence[tuple[int, int]],
-    connections: Iterable[Any],
-    line_color: Color,
-    point_color: Color | None,
-    thickness: int,
-    radius: int,
+def _draw_connections(
+    frame: np.ndarray, points: Sequence[tuple[int, int]], connections: Iterable[Any], color: Color, thickness: int
 ) -> None:
     for connection in connections:
-        cv.line(frame, points[connection.start], points[connection.end], line_color, thickness, cv.LINE_AA)
-    if point_color is not None:
-        _draw_points(frame, points, point_color, radius)
+        cv.line(frame, points[connection.start], points[connection.end], color, thickness, cv.LINE_AA)
 
 
-def _draw_points(frame: np.ndarray, points: Iterable[tuple[int, int]], color: Color, radius: int) -> None:
+def _draw_points(
+    frame: np.ndarray, points: Iterable[tuple[int, int]], color: Color, radius: int, thickness: int = cv.FILLED
+) -> None:
     for point in points:
-        cv.circle(frame, point, radius, color, cv.FILLED, cv.LINE_AA)
-
-
-def _indexed(landmarks: Landmarks) -> list[list[int]]:
-    return [[i, x, y] for i, (x, y) in enumerate(landmarks.points)]
+        cv.circle(frame, point, radius, color, thickness, cv.LINE_AA)
 
 
 class Detector(ABC):
@@ -196,7 +190,12 @@ class Detector(ABC):
 
 
 class _LandmarkDetector(Detector):
-    _connections: Sequence[Any] = ()
+    _connections: Sequence[Any]
+
+    def _draw_skeletons(self, frame: np.ndarray, color: Color, point_color: Color) -> None:
+        for found in self._detected():
+            _draw_connections(frame, found.points, self._connections, color, 2)
+            _draw_points(frame, found.points, point_color, 3)
 
     def _locate(self, frame: np.ndarray, index: int, draw: bool, color: Color, radius: int) -> list[list[int]]:
         detected = self._detected()
@@ -205,7 +204,7 @@ class _LandmarkDetector(Detector):
         found = detected[index]
         if draw:
             _draw_points(frame, found.points, color, radius)
-        return _indexed(found)
+        return [[i, x, y] for i, (x, y) in enumerate(found.points)]
 
 
 class Hand(_LandmarkDetector):
@@ -226,8 +225,7 @@ class Hand(_LandmarkDetector):
             "handsMax": "max_hands",
             "detectionConfidence": "detection_confidence",
             "trackingConfidence": "tracking_confidence",
-        },
-        takes_frame=False,
+        }
     )
     def __init__(
         self,
@@ -277,8 +275,7 @@ class Hand(_LandmarkDetector):
             for lms, handed in zip(result.hand_landmarks, result.handedness)
         ]
         if draw:
-            for hand in self._last:
-                _draw_skeleton(frame, hand.points, self._connections, color, point_color, 2, 3)
+            self._draw_skeletons(frame, color, point_color)
         return self._last
 
     @_accepts_legacy(
@@ -332,8 +329,7 @@ class Pose(_LandmarkDetector):
             "upperBody": None,
             "detectionConfidence": "detection_confidence",
             "trackingConfidence": "tracking_confidence",
-        },
-        takes_frame=False,
+        }
     )
     def __init__(
         self,
@@ -382,8 +378,7 @@ class Pose(_LandmarkDetector):
         result = self._run(frame)
         self._last = [_to_landmarks(lms, frame.shape) for lms in result.pose_landmarks]
         if draw:
-            for pose in self._last:
-                _draw_skeleton(frame, pose.points, self._connections, color, point_color, 2, 3)
+            self._draw_skeletons(frame, color, point_color)
         return self._last
 
     @_accepts_legacy({"drawOnPose": "draw", "drawingColor": "color", "drawingSize": "radius"})
@@ -422,8 +417,7 @@ class FaceMesh(_LandmarkDetector):
             "facesMax": "max_faces",
             "detectionConfidence": "detection_confidence",
             "trackingConfidence": "tracking_confidence",
-        },
-        takes_frame=False,
+        }
     )
     def __init__(
         self,
@@ -484,11 +478,11 @@ class FaceMesh(_LandmarkDetector):
         self._last = [_to_landmarks(lms, frame.shape) for lms in result.face_landmarks]
         if draw:
             for face in self._last:
-                _draw_skeleton(frame, face.points, self._connections, color, None, thickness, 0)
-                for point in face.points:
-                    cv.circle(frame, point, radius, color, thickness, cv.LINE_AA)
+                _draw_connections(frame, face.points, self._connections, color, thickness)
+                _draw_points(frame, face.points, color, radius, thickness)
         return self._last
 
+    @_accepts_legacy({})
     def locate(
         self,
         frame: np.ndarray,
@@ -528,7 +522,7 @@ class Face(Detector):
         model_path: Use a local ``blaze_face_short_range.tflite`` file instead of downloading one.
     """
 
-    @_accepts_legacy({"detectionConfidence": "detection_confidence", "faceDistanceLevel": None}, takes_frame=False)
+    @_accepts_legacy({"detectionConfidence": "detection_confidence", "faceDistanceLevel": None})
     def __init__(
         self,
         *,
@@ -556,7 +550,6 @@ class Face(Detector):
             One :class:`FaceBox` per face, or an empty list when no face is visible.
         """
         result = self._run(frame)
-        height, width = frame.shape[:2]
         self._last = [
             FaceBox(
                 x=d.bounding_box.origin_x,
@@ -564,7 +557,7 @@ class Face(Detector):
                 width=d.bounding_box.width,
                 height=d.bounding_box.height,
                 score=d.categories[0].score,
-                keypoints=tuple((int(k.x * width), int(k.y * height)) for k in d.keypoints),
+                keypoints=_to_pixels(d.keypoints, frame.shape),
             )
             for d in result.detections
         ]
@@ -597,12 +590,10 @@ class Face(Detector):
         return boxes
 
 
-def _draw_corner_box(
-    frame: np.ndarray, box: tuple[int, int, int, int], color: Color, length: int = 30, thickness: int = 5
-) -> None:
+def _draw_corner_box(frame: np.ndarray, box: tuple[int, int, int, int], color: Color) -> None:
     x, y, w, h = box
     x2, y2 = x + w, y + h
     cv.rectangle(frame, box, color, 1)
     for cx, cy, dx, dy in ((x, y, 1, 1), (x2, y, -1, 1), (x, y2, 1, -1), (x2, y2, -1, -1)):
-        cv.line(frame, (cx, cy), (cx + dx * length, cy), color, thickness)
-        cv.line(frame, (cx, cy), (cx, cy + dy * length), color, thickness)
+        cv.line(frame, (cx, cy), (cx + dx * 30, cy), color, 5)
+        cv.line(frame, (cx, cy), (cx, cy + dy * 30), color, 5)

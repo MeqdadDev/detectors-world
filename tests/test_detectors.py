@@ -103,7 +103,7 @@ def test_locate_without_detect_explains_what_to_do(cls, blank):
         detector.locate(blank)
 
 
-def test_locate_follows_the_latest_detect(image, blank):
+def test_locate_follows_the_latest_detect(image):
     frame = image("hands")
     with Hand() as hand:
         hand.detect(frame, draw=False)
@@ -162,6 +162,11 @@ def test_grayscale_and_bgra_frames_are_accepted(frame):
 def test_none_frame_explains_camera_problem():
     with Hand() as hand, pytest.raises(ValueError, match="camera returned no image"):
         hand.detect(None)
+
+
+def test_non_array_frame_is_rejected():
+    with Hand() as hand, pytest.raises(TypeError, match="NumPy array"):
+        hand.detect([[0]])
 
 
 def test_float_frame_is_rejected():

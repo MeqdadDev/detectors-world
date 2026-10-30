@@ -69,8 +69,7 @@ def create_detector(kind: str, **options: Any) -> Detector:
     """
     key = kind.strip().lower().replace("-", "_").replace(" ", "_")
     if key not in _DETECTORS:
-        names = ", ".join(repr(name) for name in ("hand", "pose", "face", "face_mesh"))
-        raise ValueError(f"Unknown detector {kind!r}. Choose one of: {names}.")
+        raise ValueError(f"Unknown detector {kind!r}. Choose one of: 'hand', 'pose', 'face', 'face_mesh'.")
     return _DETECTORS[key](**options)
 
 

@@ -26,6 +26,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
       - name: Install OpenGL runtime for OpenCV
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libgl1 libegl1
@@ -35,6 +37,7 @@ jobs:
             .models
             tests/.cache
           key: models-${{ hashFiles('src/detectors_world/_models.py', 'tests/conftest.py') }}
+          restore-keys: models-
       - run: python -m pip install -e ".[test]"
       - run: python -m pytest -v
 
