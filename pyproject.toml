@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "detectors_world"
+dynamic = ["version"]
+description = "Hand, pose, face and face mesh detection for computer vision projects, in a few lines of Python."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Meqdad Darwish", email = "meqdad.darweesh@gmail.com" }]
+requires-python = ">=3.10"
+dependencies = [
+    "mediapipe>=1.2,<2",
+    # mediapipe already depends on the contrib build; adding opencv-python too would install two copies of cv2.
+    "opencv-contrib-python>=4.8",
+    "numpy>=1.23",
+]
+keywords = ["computer vision", "mediapipe", "opencv", "hand tracking", "pose estimation", "face detection"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
+    "Typing :: Typed",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.urls]
+Homepage = "https://github.com/MeqdadDev/detectors-world"
+Source = "https://github.com/MeqdadDev/detectors-world"
+Issues = "https://github.com/MeqdadDev/detectors-world/issues"
+Changelog = "https://github.com/MeqdadDev/detectors-world/blob/main/CHANGELOG.md"
+
+[tool.hatch.version]
+path = "src/detectors_world/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/detectors_world", "tests", "examples", "README.md", "CHANGELOG.md", "LICENSE"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

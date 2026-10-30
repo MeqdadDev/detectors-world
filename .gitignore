@@ -131,3 +131,6 @@ dmypy.json
 
 # code tests
 tests.py
+# test sample images and models
+tests/.cache/
+.models/
