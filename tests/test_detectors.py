@@ -1,3 +1,4 @@
+import cv2 as cv
 import numpy as np
 import pytest
 
@@ -96,9 +97,47 @@ def test_draw_changes_frame_only_when_asked(image):
         assert not np.array_equal(drawn, frame)
 
 
-def test_locate_without_detect_runs_detection(image):
+@pytest.mark.parametrize("cls", [Hand, Pose, Face, FaceMesh])
+def test_locate_without_detect_explains_what_to_do(cls, blank):
+    with cls() as detector, pytest.raises(RuntimeError, match="Call detect"):
+        detector.locate(blank)
+
+
+def test_locate_follows_the_latest_detect(image, blank):
+    frame = image("hands")
+    with Hand() as hand:
+        hand.detect(frame, draw=False)
+        assert hand.locate(frame, draw=False)
+        hand.detect(np.zeros_like(frame), draw=False)
+        assert hand.locate(frame, draw=False) == []
+
+
+def test_closed_detector_refuses_to_detect(blank):
+    hand = Hand()
+    hand.close()
+    with pytest.raises(RuntimeError, match="closed"):
+        hand.detect(blank)
+
+
+def test_closing_twice_is_harmless():
+    with Hand() as hand:
+        hand.close()
+
+
+def test_default_settings_match_0x():
+    with Pose() as pose:
+        assert pose.model == "full"
+    with Face() as face:
+        assert face.detection_confidence == 0.6
+
+
+def test_hand_labels_swap_on_a_mirrored_frame(image):
+    frame = image("hands")
     with Hand(static_image=True) as hand:
-        assert len(hand.locate(image("hands"), draw=False)) == 21
+        lower_hand = max(hand.detect(frame, draw=False), key=lambda h: h.points[0][1])
+        mirrored = max(hand.detect(cv.flip(frame, 1), draw=False), key=lambda h: h.points[0][1])
+    assert lower_hand.label == "Left"
+    assert mirrored.label == "Right"
 
 
 def test_video_mode_accepts_back_to_back_frames(image):

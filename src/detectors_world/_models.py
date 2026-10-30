@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import http.client
 import os
 import sys
 import tempfile
@@ -8,13 +10,32 @@ from pathlib import Path
 
 _BASE_URL = "https://storage.googleapis.com/mediapipe-models"
 
-MODELS: dict[str, str] = {
-    "hand_landmarker.task": "hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task",
-    "pose_landmarker_lite.task": "pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task",
-    "pose_landmarker_full.task": "pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task",
-    "pose_landmarker_heavy.task": "pose_landmarker/pose_landmarker_heavy/float16/latest/pose_landmarker_heavy.task",
-    "blaze_face_short_range.tflite": "face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite",
-    "face_landmarker.task": "face_landmarker/face_landmarker/float16/latest/face_landmarker.task",
+# Pinned to version 1 with hashes: the "latest" URLs can change without notice.
+MODELS: dict[str, tuple[str, str]] = {
+    "hand_landmarker.task": (
+        "hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+        "fbc2a30080c3c557093b5ddfc334698132eb341044ccee322ccf8bcf3607cde1",
+    ),
+    "pose_landmarker_lite.task": (
+        "pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+        "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
+    ),
+    "pose_landmarker_full.task": (
+        "pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+        "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1",
+    ),
+    "pose_landmarker_heavy.task": (
+        "pose_landmarker/pose_landmarker_heavy/float16/1/pose_landmarker_heavy.task",
+        "64437af838a65d18e5ba7a0d39b465540069bc8aae8308de3e318aad31fcbc7b",
+    ),
+    "blaze_face_short_range.tflite": (
+        "face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite",
+        "b4578f35940bf5a1a655214a1cce5cab13eba73c1297cd78e1a04c2380b0152f",
+    ),
+    "face_landmarker.task": (
+        "face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+        "64184e229b263107bc2b804c6625db1341ff2bb731874b0bcc2fe6544e0bc9ff",
+    ),
 }
 
 
@@ -33,32 +54,56 @@ def cache_dir() -> Path:
     return base / "detectors_world"
 
 
-def resolve_model(filename: str, model_path: str | os.PathLike[str] | None = None) -> str:
-    """Return a local path to a model file, downloading it on first use."""
+def _is_intact(filename: str, data: bytes) -> bool:
+    return hashlib.sha256(data).hexdigest() == MODELS[filename][1]
+
+
+def _download(filename: str, target: Path) -> bytes:
+    url = f"{_BASE_URL}/{MODELS[filename][0]}"
+    advice = (
+        f"Download it manually and pass model_path='path/to/{filename}', "
+        f"or place it in {target.parent}."
+    )
+    print(f"detectors_world: downloading {filename} (first run only)...", file=sys.stderr)
+    try:
+        with urllib.request.urlopen(url, timeout=60) as response:
+            data = response.read()
+    except (OSError, http.client.HTTPException) as err:
+        raise RuntimeError(f"Could not download the model {filename} from {url}: {err}\n{advice}") from err
+    if not _is_intact(filename, data):
+        raise RuntimeError(f"The download of {filename} from {url} is damaged or incomplete.\n{advice}")
+    return data
+
+
+def _store(target: Path, data: bytes) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=target.parent, suffix=".part")
+    try:
+        with os.fdopen(fd, "wb") as tmp:
+            tmp.write(data)
+        os.replace(tmp_name, target)
+    finally:
+        Path(tmp_name).unlink(missing_ok=True)
+
+
+def load_model(filename: str, model_path: str | os.PathLike[str] | None = None) -> bytes:
+    """Return a model's contents, downloading it on first use.
+
+    Bytes rather than a path are handed to MediaPipe because it cannot open
+    paths with non-ASCII characters on Windows, such as a user folder name.
+    """
     if model_path is not None:
         path = Path(model_path)
         if not path.is_file():
             raise FileNotFoundError(f"Model file not found: {path}")
-        return str(path)
+        return path.read_bytes()
 
     target = cache_dir() / filename
     if target.is_file():
-        return str(target)
+        data = target.read_bytes()
+        if _is_intact(filename, data):
+            return data
 
-    url = f"{_BASE_URL}/{MODELS[filename]}"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    print(f"detectors_world: downloading {filename} (first run only)...", file=sys.stderr)
-    fd, tmp_name = tempfile.mkstemp(dir=target.parent, suffix=".part")
-    try:
-        with os.fdopen(fd, "wb") as tmp, urllib.request.urlopen(url, timeout=60) as response:
-            while chunk := response.read(1 << 16):
-                tmp.write(chunk)
-        os.replace(tmp_name, target)
-    except OSError as err:
-        Path(tmp_name).unlink(missing_ok=True)
-        raise RuntimeError(
-            f"Could not download the model {filename} from {url}: {err}\n"
-            f"Download it manually and pass model_path='path/to/{filename}', "
-            f"or place it in {target.parent}."
-        ) from err
-    return str(target)
+    data = _download(filename, target)
+    _store(target, data)
+    return data

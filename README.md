@@ -65,7 +65,9 @@ Using the detector in a `with` block releases the model when you are done. You c
 - **`Landmarks`** (hand, pose, face mesh): `points` holds `(x, y)` pixel positions, and `normalized` holds `(x, y, z)` values relative to the image size. For hands, `label` is `"Left"` or `"Right"` and `score` is its confidence. You can also index it directly: `hands[0][8]` is the same as `hands[0].points[8]`.
 - **`FaceBox`** (face): `x`, `y`, `width`, `height`, `score` and `keypoints`, plus `box` for `(x, y, width, height)`.
 
-`locate()` reuses the latest `detect()` result, draws markers, and returns plain lists such as `[[id, x, y], ...]`. It returns `[]` when nothing is found.
+`locate()` reads the latest `detect()` result, so call `detect()` first, once for every frame. It draws markers and returns plain lists such as `[[id, x, y], ...]`, or `[]` when nothing is found.
+
+Hand labels name the person's own hands. MediaPipe swaps them on a mirrored frame, such as one from `cv.flip(frame, 1)`.
 
 ## Hand Detector ✋
 
@@ -93,7 +95,7 @@ See [examples/finger_counter.py](https://github.com/MeqdadDev/detectors-world/bl
 </p>
 
 ```python
-pose = create_detector("pose", model="lite")  # "lite", "full" or "heavy"
+pose = create_detector("pose", model="full")  # "lite", "full" or "heavy"
 
 bodies = pose.detect(frame)
 landmarks = pose.locate(frame)  # [[id, x, y], ...] for 33 body landmarks
@@ -136,7 +138,7 @@ Every detector accepts these options in `create_detector()`:
 
 | Option | Default | Meaning |
 |---|---|---|
-| `detection_confidence` | `0.5` | Minimum confidence to report something new |
+| `detection_confidence` | `0.5` (`0.6` for `"face"`) | Minimum confidence to report something new |
 | `tracking_confidence` | `0.5` | Minimum confidence to keep tracking between frames (not used by `"face"`) |
 | `static_image` | `False` | Set to `True` when processing unrelated photos instead of video frames |
 | `model_path` | `None` | Use a model file you already downloaded, for offline use |
@@ -147,7 +149,7 @@ Some options apply to one detector:
 |---|---|---|---|
 | `"hand"` | `max_hands` | `2` | Largest number of hands to look for |
 | `"pose"` | `max_poses` | `1` | Largest number of people to look for |
-| `"pose"` | `model` | `"lite"` | `"lite"` is fastest, `"heavy"` is most accurate |
+| `"pose"` | `model` | `"full"` | `"lite"` is fastest, `"heavy"` is most accurate |
 | `"face_mesh"` | `max_faces` | `2` | Largest number of faces to look for |
 
 `detect()` and `locate()` take `draw=False` to skip drawing, and `color=(b, g, r)` to change the drawing color.
@@ -167,7 +169,14 @@ python examples/finger_counter.py
 
 ## Upgrading from 0.x
 
-Code written for 0.x keeps working and shows a `DeprecationWarning` that names the new spelling:
+0.x installed `opencv-python`, while 1.x uses the `opencv-contrib-python` build that MediaPipe requires. Remove the old package when you upgrade, so that only one copy of `cv2` is installed:
+
+```bash
+pip uninstall opencv-python
+pip install --upgrade --force-reinstall detectors-world
+```
+
+Old argument names and positional calls keep working and show a `DeprecationWarning` that names the new spelling:
 
 | 0.x | 1.x |
 |---|---|
@@ -181,9 +190,9 @@ Code written for 0.x keeps working and shows a `DeprecationWarning` that names t
 
 The old names will be removed in 2.0.
 
-A few results changed shape, so check code that uses them:
+Return values did change, so check code that uses them:
 
-- `detect()` now returns the results instead of the frame. It still draws on the frame you pass in.
+- `detect()` now returns the results instead of the frame. It still draws on the frame you pass in, so replace `img = hand.detect(img)` with `hand.detect(img)`.
 - `face.locate()` always returns the list of boxes, not `(frame, boxes)`.
 - `face_mesh.locate()` returns one face's `[[id, x, y], ...]`, not `(frame, faces)`.
 

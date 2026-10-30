@@ -10,7 +10,8 @@ class Landmarks:
     Attributes:
         points: ``(x, y)`` pixel coordinates, one per landmark.
         normalized: ``(x, y, z)`` coordinates relative to the image size (0.0 to 1.0 for x and y).
-        label: ``"Left"`` or ``"Right"`` for hands, otherwise ``None``.
+        label: ``"Left"`` or ``"Right"`` for hands, otherwise ``None``. This is the person's
+            own hand, and MediaPipe swaps the labels on a mirrored frame.
         score: Confidence of ``label`` for hands, otherwise ``None``.
     """
 

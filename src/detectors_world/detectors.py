@@ -1,22 +1,26 @@
 from __future__ import annotations
 
+import functools
 import os
 import time
 import warnings
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Sequence
-from typing import Any
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import Any, NamedTuple, TypeVar, cast
 
 import cv2 as cv
 import mediapipe as mp
 import numpy as np
 from mediapipe.tasks.python import BaseOptions, vision
 
-from ._models import resolve_model
+from ._models import load_model
 from .results import FaceBox, Landmarks
 
 Color = tuple[int, int, int]
 PathLike = str | os.PathLike[str]
+
+_F = TypeVar("_F", bound=Callable[..., Any])
+_D = TypeVar("_D", bound="Detector")
 
 _POSE_MODELS = {
     "lite": "pose_landmarker_lite.task",
@@ -25,22 +29,58 @@ _POSE_MODELS = {
 }
 
 
-def _translate_legacy(
-    legacy: dict[str, Any], mapping: dict[str, str | None], owner: str
-) -> dict[str, Any]:
-    """Map 0.x camelCase keyword arguments to their new names, warning once per use."""
-    translated = {}
-    for old, value in legacy.items():
-        if old not in mapping:
-            raise TypeError(f"{owner}() got an unexpected keyword argument '{old}'")
-        new = mapping[old]
-        if new is None:
-            message = f"'{old}' has no effect since detectors_world 1.0 and will be removed in 2.0."
-        else:
-            message = f"'{old}' is deprecated, use '{new}' instead. It will be removed in detectors_world 2.0."
-            translated[new] = value
-        warnings.warn(message, DeprecationWarning, stacklevel=3)
-    return translated
+class _Renamed(NamedTuple):
+    name: str
+    convert: Callable[[Any], Any]
+    note: str
+
+
+_LegacyRule = str | _Renamed | None
+
+
+def _deprecated(old: str, new: str, note: str = "") -> str:
+    detail = f" ({note})" if note else ""
+    return f"'{old}' is deprecated, use '{new}' instead{detail}. It will be removed in detectors_world 2.0."
+
+
+def _accepts_legacy(names: Mapping[str, _LegacyRule], *, takes_frame: bool = True) -> Callable[[_F], _F]:
+    """Accept 0.x keyword and positional arguments, translating them with a DeprecationWarning.
+
+    Args:
+        names: Each 0.x parameter, in its 0.x positional order, mapped to its new
+            name, to a ``_Renamed`` rule, or to ``None`` if it no longer has an effect.
+        takes_frame: The method's first parameter is the frame, ``sourceFrame`` in 0.x.
+    """
+
+    def decorate(func: _F) -> _F:
+        leading = 1 if takes_frame else 0
+
+        @functools.wraps(func)
+        def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+            if takes_frame and "sourceFrame" in kwargs:
+                warnings.warn(_deprecated("sourceFrame", "frame"), DeprecationWarning, stacklevel=2)
+                args = (kwargs.pop("sourceFrame"), *args)
+            extra = args[leading:]
+            if len(extra) > len(names):
+                raise TypeError(f"{func.__qualname__}() got too many positional arguments")
+            supplied = dict(zip(names, extra))
+            supplied.update({old: kwargs.pop(old) for old in list(kwargs) if old in names})
+            for old, value in supplied.items():
+                rule = names[old]
+                if rule is None:
+                    message = f"'{old}' has no effect since detectors_world 1.0 and will be removed in 2.0."
+                elif isinstance(rule, _Renamed):
+                    message = _deprecated(old, rule.name, rule.note)
+                    kwargs[rule.name] = rule.convert(value)
+                else:
+                    message = _deprecated(old, rule)
+                    kwargs[rule] = value
+                warnings.warn(message, DeprecationWarning, stacklevel=2)
+            return func(self, *args[:leading], **kwargs)
+
+        return cast(_F, wrapper)
+
+    return decorate
 
 
 def _to_rgb(frame: np.ndarray) -> np.ndarray:
@@ -85,8 +125,7 @@ def _draw_skeleton(
     for connection in connections:
         cv.line(frame, points[connection.start], points[connection.end], line_color, thickness, cv.LINE_AA)
     if point_color is not None:
-        for point in points:
-            cv.circle(frame, point, radius, point_color, cv.FILLED, cv.LINE_AA)
+        _draw_points(frame, points, point_color, radius)
 
 
 def _draw_points(frame: np.ndarray, points: Iterable[tuple[int, int]], color: Color, radius: int) -> None:
@@ -105,13 +144,19 @@ class Detector(ABC):
     :meth:`close` when you are done, to release it.
     """
 
-    def __init__(self, static_image: bool) -> None:
+    _last: list[Any] | None = None
+
+    def __init__(self, model: bytes, static_image: bool) -> None:
         self._static_image = static_image
         self._last_timestamp_ms = -1
-        self._task = self._create_task(vision.RunningMode.IMAGE if static_image else vision.RunningMode.VIDEO)
+        self._closed = False
+        self._task = self._create_task(
+            BaseOptions(model_asset_buffer=model),
+            vision.RunningMode.IMAGE if static_image else vision.RunningMode.VIDEO,
+        )
 
     @abstractmethod
-    def _create_task(self, running_mode: vision.RunningMode) -> Any: ...
+    def _create_task(self, base_options: BaseOptions, running_mode: vision.RunningMode) -> Any: ...
 
     @abstractmethod
     def detect(self, frame: np.ndarray, *, draw: bool = True) -> list[Any]:
@@ -122,6 +167,8 @@ class Detector(ABC):
         """Return pixel positions from the latest :meth:`detect` call."""
 
     def _run(self, frame: np.ndarray) -> Any:
+        if self._closed:
+            raise RuntimeError("This detector is closed. Create a new one to keep detecting.")
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=_to_rgb(frame))
         if self._static_image:
             return self._task.detect(image)
@@ -130,11 +177,18 @@ class Detector(ABC):
         self._last_timestamp_ms = timestamp_ms
         return self._task.detect_for_video(image, timestamp_ms)
 
+    def _detected(self) -> list[Any]:
+        if self._last is None:
+            raise RuntimeError("Call detect(frame) before locate(frame), once for every frame.")
+        return self._last
+
     def close(self) -> None:
         """Release the model. The detector cannot be used afterwards."""
-        self._task.close()
+        if not self._closed:
+            self._closed = True
+            self._task.close()
 
-    def __enter__(self) -> Detector:
+    def __enter__(self: _D) -> _D:
         return self
 
     def __exit__(self, *exc_info: object) -> None:
@@ -143,21 +197,12 @@ class Detector(ABC):
 
 class _LandmarkDetector(Detector):
     _connections: Sequence[Any] = ()
-    _owner = "Detector"
-    _last: list[Landmarks] | None = None
-
-    def _pick(self, frame: np.ndarray, index: int) -> Landmarks | None:
-        if self._last is None:
-            self.detect(frame, draw=False)
-        assert self._last is not None
-        if not 0 <= index < len(self._last):
-            return None
-        return self._last[index]
 
     def _locate(self, frame: np.ndarray, index: int, draw: bool, color: Color, radius: int) -> list[list[int]]:
-        found = self._pick(frame, index)
-        if found is None:
+        detected = self._detected()
+        if not 0 <= index < len(detected):
             return []
+        found = detected[index]
         if draw:
             _draw_points(frame, found.points, color, radius)
         return _indexed(found)
@@ -176,6 +221,14 @@ class Hand(_LandmarkDetector):
 
     _connections = vision.HandLandmarksConnections.HAND_CONNECTIONS
 
+    @_accepts_legacy(
+        {
+            "handsMax": "max_hands",
+            "detectionConfidence": "detection_confidence",
+            "trackingConfidence": "tracking_confidence",
+        },
+        takes_frame=False,
+    )
     def __init__(
         self,
         *,
@@ -184,34 +237,16 @@ class Hand(_LandmarkDetector):
         tracking_confidence: float = 0.5,
         static_image: bool = False,
         model_path: PathLike | None = None,
-        **legacy: Any,
     ) -> None:
-        options = {
-            "max_hands": max_hands,
-            "detection_confidence": detection_confidence,
-            "tracking_confidence": tracking_confidence,
-        }
-        options.update(
-            _translate_legacy(
-                legacy,
-                {
-                    "handsMax": "max_hands",
-                    "detectionConfidence": "detection_confidence",
-                    "trackingConfidence": "tracking_confidence",
-                },
-                "Hand",
-            )
-        )
-        self.max_hands = options["max_hands"]
-        self.detection_confidence = options["detection_confidence"]
-        self.tracking_confidence = options["tracking_confidence"]
-        self._model_path = resolve_model("hand_landmarker.task", model_path)
-        super().__init__(static_image)
+        self.max_hands = max_hands
+        self.detection_confidence = detection_confidence
+        self.tracking_confidence = tracking_confidence
+        super().__init__(load_model("hand_landmarker.task", model_path), static_image)
 
-    def _create_task(self, running_mode: vision.RunningMode) -> Any:
+    def _create_task(self, base_options: BaseOptions, running_mode: vision.RunningMode) -> Any:
         return vision.HandLandmarker.create_from_options(
             vision.HandLandmarkerOptions(
-                base_options=BaseOptions(model_asset_path=self._model_path),
+                base_options=base_options,
                 running_mode=running_mode,
                 num_hands=self.max_hands,
                 min_hand_detection_confidence=self.detection_confidence,
@@ -220,6 +255,7 @@ class Hand(_LandmarkDetector):
             )
         )
 
+    @_accepts_legacy({"drawOnHand": "draw"})
     def detect(
         self,
         frame: np.ndarray,
@@ -227,15 +263,14 @@ class Hand(_LandmarkDetector):
         draw: bool = True,
         color: Color = (224, 224, 224),
         point_color: Color = (0, 0, 255),
-        **legacy: Any,
     ) -> list[Landmarks]:
         """Find hands in ``frame`` and optionally draw them on it.
 
         Returns:
             One :class:`Landmarks` per hand, with ``label`` set to ``"Left"`` or ``"Right"``.
-            An empty list when no hand is visible.
+            An empty list when no hand is visible. Labels name the person's own hands,
+            and MediaPipe swaps them on a mirrored frame such as ``cv.flip(frame, 1)``.
         """
-        draw = _translate_legacy(legacy, {"drawOnHand": "draw"}, "Hand.detect").get("draw", draw)
         result = self._run(frame)
         self._last = [
             _to_landmarks(lms, frame.shape, handed[0].category_name, handed[0].score)
@@ -246,6 +281,14 @@ class Hand(_LandmarkDetector):
                 _draw_skeleton(frame, hand.points, self._connections, color, point_color, 2, 3)
         return self._last
 
+    @_accepts_legacy(
+        {
+            "handsNumber": _Renamed("hand", lambda number: max(int(number) - 1, 0), "it counts from 0"),
+            "drawOnHand": "draw",
+            "drawingColor": "color",
+            "drawingSize": "radius",
+        }
+    )
     def locate(
         self,
         frame: np.ndarray,
@@ -254,7 +297,6 @@ class Hand(_LandmarkDetector):
         draw: bool = True,
         color: Color = (0, 255, 0),
         radius: int = 6,
-        **legacy: Any,
     ) -> list[list[int]]:
         """Pixel positions of one hand's landmarks from the latest :meth:`detect` call.
 
@@ -268,30 +310,14 @@ class Hand(_LandmarkDetector):
         Returns:
             ``[[id, x, y], ...]`` for the 21 landmarks, or ``[]`` if that hand is not visible.
         """
-        if "handsNumber" in legacy:
-            hand = max(int(legacy["handsNumber"]) - 1, 0)
-            legacy = {k: v for k, v in legacy.items() if k != "handsNumber"}
-            warnings.warn(
-                "'handsNumber' is deprecated, use 'hand' instead (it counts from 0). "
-                "It will be removed in detectors_world 2.0.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-        options = _translate_legacy(
-            legacy,
-            {"drawOnHand": "draw", "drawingColor": "color", "drawingSize": "radius"},
-            "Hand.locate",
-        )
-        return self._locate(
-            frame, hand, options.get("draw", draw), options.get("color", color), options.get("radius", radius)
-        )
+        return self._locate(frame, hand, draw, color, radius)
 
 
 class Pose(_LandmarkDetector):
     """Finds a body and its 33 landmarks (face, shoulders, arms, hips, legs).
 
     Args:
-        model: ``"lite"`` (fastest), ``"full"`` or ``"heavy"`` (most accurate).
+        model: ``"lite"`` (fastest), ``"full"`` (default) or ``"heavy"`` (most accurate).
         max_poses: Largest number of people to look for.
         detection_confidence: Minimum confidence (0.0 to 1.0) to report a new body.
         tracking_confidence: Minimum confidence (0.0 to 1.0) to keep tracking a body between frames.
@@ -301,41 +327,36 @@ class Pose(_LandmarkDetector):
 
     _connections = vision.PoseLandmarksConnections.POSE_LANDMARKS
 
+    @_accepts_legacy(
+        {
+            "upperBody": None,
+            "detectionConfidence": "detection_confidence",
+            "trackingConfidence": "tracking_confidence",
+        },
+        takes_frame=False,
+    )
     def __init__(
         self,
         *,
-        model: str = "lite",
+        model: str = "full",
         max_poses: int = 1,
         detection_confidence: float = 0.5,
         tracking_confidence: float = 0.5,
         static_image: bool = False,
         model_path: PathLike | None = None,
-        **legacy: Any,
     ) -> None:
         if model not in _POSE_MODELS:
             raise ValueError(f"model must be one of {', '.join(map(repr, _POSE_MODELS))}, got {model!r}.")
-        options = {"detection_confidence": detection_confidence, "tracking_confidence": tracking_confidence}
-        options.update(
-            _translate_legacy(
-                legacy,
-                {
-                    "upperBody": None,
-                    "detectionConfidence": "detection_confidence",
-                    "trackingConfidence": "tracking_confidence",
-                },
-                "Pose",
-            )
-        )
+        self.model = model
         self.max_poses = max_poses
-        self.detection_confidence = options["detection_confidence"]
-        self.tracking_confidence = options["tracking_confidence"]
-        self._model_path = resolve_model(_POSE_MODELS[model], model_path)
-        super().__init__(static_image)
+        self.detection_confidence = detection_confidence
+        self.tracking_confidence = tracking_confidence
+        super().__init__(load_model(_POSE_MODELS[model], model_path), static_image)
 
-    def _create_task(self, running_mode: vision.RunningMode) -> Any:
+    def _create_task(self, base_options: BaseOptions, running_mode: vision.RunningMode) -> Any:
         return vision.PoseLandmarker.create_from_options(
             vision.PoseLandmarkerOptions(
-                base_options=BaseOptions(model_asset_path=self._model_path),
+                base_options=base_options,
                 running_mode=running_mode,
                 num_poses=self.max_poses,
                 min_pose_detection_confidence=self.detection_confidence,
@@ -344,6 +365,7 @@ class Pose(_LandmarkDetector):
             )
         )
 
+    @_accepts_legacy({"drawOnPose": "draw"})
     def detect(
         self,
         frame: np.ndarray,
@@ -351,14 +373,12 @@ class Pose(_LandmarkDetector):
         draw: bool = True,
         color: Color = (224, 224, 224),
         point_color: Color = (0, 0, 255),
-        **legacy: Any,
     ) -> list[Landmarks]:
         """Find bodies in ``frame`` and optionally draw them on it.
 
         Returns:
             One :class:`Landmarks` per body, or an empty list when nobody is visible.
         """
-        draw = _translate_legacy(legacy, {"drawOnPose": "draw"}, "Pose.detect").get("draw", draw)
         result = self._run(frame)
         self._last = [_to_landmarks(lms, frame.shape) for lms in result.pose_landmarks]
         if draw:
@@ -366,6 +386,7 @@ class Pose(_LandmarkDetector):
                 _draw_skeleton(frame, pose.points, self._connections, color, point_color, 2, 3)
         return self._last
 
+    @_accepts_legacy({"drawOnPose": "draw", "drawingColor": "color", "drawingSize": "radius"})
     def locate(
         self,
         frame: np.ndarray,
@@ -374,21 +395,13 @@ class Pose(_LandmarkDetector):
         draw: bool = True,
         color: Color = (0, 255, 0),
         radius: int = 6,
-        **legacy: Any,
     ) -> list[list[int]]:
         """Pixel positions of one body's landmarks from the latest :meth:`detect` call.
 
         Returns:
             ``[[id, x, y], ...]`` for the 33 landmarks, or ``[]`` if nobody is visible.
         """
-        options = _translate_legacy(
-            legacy,
-            {"drawOnPose": "draw", "drawingColor": "color", "drawingSize": "radius"},
-            "Pose.locate",
-        )
-        return self._locate(
-            frame, pose, options.get("draw", draw), options.get("color", color), options.get("radius", radius)
-        )
+        return self._locate(frame, pose, draw, color, radius)
 
 
 class FaceMesh(_LandmarkDetector):
@@ -404,6 +417,14 @@ class FaceMesh(_LandmarkDetector):
 
     _connections = vision.FaceLandmarksConnections.FACE_LANDMARKS_CONTOURS
 
+    @_accepts_legacy(
+        {
+            "facesMax": "max_faces",
+            "detectionConfidence": "detection_confidence",
+            "trackingConfidence": "tracking_confidence",
+        },
+        takes_frame=False,
+    )
     def __init__(
         self,
         *,
@@ -412,34 +433,16 @@ class FaceMesh(_LandmarkDetector):
         tracking_confidence: float = 0.5,
         static_image: bool = False,
         model_path: PathLike | None = None,
-        **legacy: Any,
     ) -> None:
-        options = {
-            "max_faces": max_faces,
-            "detection_confidence": detection_confidence,
-            "tracking_confidence": tracking_confidence,
-        }
-        options.update(
-            _translate_legacy(
-                legacy,
-                {
-                    "facesMax": "max_faces",
-                    "detectionConfidence": "detection_confidence",
-                    "trackingConfidence": "tracking_confidence",
-                },
-                "FaceMesh",
-            )
-        )
-        self.max_faces = options["max_faces"]
-        self.detection_confidence = options["detection_confidence"]
-        self.tracking_confidence = options["tracking_confidence"]
-        self._model_path = resolve_model("face_landmarker.task", model_path)
-        super().__init__(static_image)
+        self.max_faces = max_faces
+        self.detection_confidence = detection_confidence
+        self.tracking_confidence = tracking_confidence
+        super().__init__(load_model("face_landmarker.task", model_path), static_image)
 
-    def _create_task(self, running_mode: vision.RunningMode) -> Any:
+    def _create_task(self, base_options: BaseOptions, running_mode: vision.RunningMode) -> Any:
         return vision.FaceLandmarker.create_from_options(
             vision.FaceLandmarkerOptions(
-                base_options=BaseOptions(model_asset_path=self._model_path),
+                base_options=base_options,
                 running_mode=running_mode,
                 num_faces=self.max_faces,
                 min_face_detection_confidence=self.detection_confidence,
@@ -448,6 +451,14 @@ class FaceMesh(_LandmarkDetector):
             )
         )
 
+    @_accepts_legacy(
+        {
+            "drawOnFace": "draw",
+            "drawingColor": "color",
+            "drawingThickness": "thickness",
+            "drawingCircleRadius": "radius",
+        }
+    )
     def detect(
         self,
         frame: np.ndarray,
@@ -456,7 +467,6 @@ class FaceMesh(_LandmarkDetector):
         color: Color = (224, 224, 224),
         thickness: int = 1,
         radius: int = 2,
-        **legacy: Any,
     ) -> list[Landmarks]:
         """Find faces in ``frame`` and optionally draw the mesh on them.
 
@@ -470,20 +480,6 @@ class FaceMesh(_LandmarkDetector):
         Returns:
             One :class:`Landmarks` per face, or an empty list when no face is visible.
         """
-        options = _translate_legacy(
-            legacy,
-            {
-                "drawOnFace": "draw",
-                "drawingColor": "color",
-                "drawingThickness": "thickness",
-                "drawingCircleRadius": "radius",
-            },
-            "FaceMesh.detect",
-        )
-        draw = options.get("draw", draw)
-        color = options.get("color", color)
-        thickness = options.get("thickness", thickness)
-        radius = options.get("radius", radius)
         result = self._run(frame)
         self._last = [_to_landmarks(lms, frame.shape) for lms in result.face_landmarks]
         if draw:
@@ -532,43 +528,33 @@ class Face(Detector):
         model_path: Use a local ``blaze_face_short_range.tflite`` file instead of downloading one.
     """
 
-    _last: list[FaceBox] | None = None
-
+    @_accepts_legacy({"detectionConfidence": "detection_confidence", "faceDistanceLevel": None}, takes_frame=False)
     def __init__(
         self,
         *,
-        detection_confidence: float = 0.5,
+        detection_confidence: float = 0.6,
         static_image: bool = False,
         model_path: PathLike | None = None,
-        **legacy: Any,
     ) -> None:
-        options = _translate_legacy(
-            legacy,
-            {"detectionConfidence": "detection_confidence", "faceDistanceLevel": None},
-            "Face",
-        )
-        self.detection_confidence = options.get("detection_confidence", detection_confidence)
-        self._model_path = resolve_model("blaze_face_short_range.tflite", model_path)
-        super().__init__(static_image)
+        self.detection_confidence = detection_confidence
+        super().__init__(load_model("blaze_face_short_range.tflite", model_path), static_image)
 
-    def _create_task(self, running_mode: vision.RunningMode) -> Any:
+    def _create_task(self, base_options: BaseOptions, running_mode: vision.RunningMode) -> Any:
         return vision.FaceDetector.create_from_options(
             vision.FaceDetectorOptions(
-                base_options=BaseOptions(model_asset_path=self._model_path),
+                base_options=base_options,
                 running_mode=running_mode,
                 min_detection_confidence=self.detection_confidence,
             )
         )
 
-    def detect(
-        self, frame: np.ndarray, *, draw: bool = True, color: Color = (0, 255, 0), **legacy: Any
-    ) -> list[FaceBox]:
+    @_accepts_legacy({"drawOnFace": "draw"})
+    def detect(self, frame: np.ndarray, *, draw: bool = True, color: Color = (0, 255, 0)) -> list[FaceBox]:
         """Find faces in ``frame`` and optionally draw a box and key points on each.
 
         Returns:
             One :class:`FaceBox` per face, or an empty list when no face is visible.
         """
-        draw = _translate_legacy(legacy, {"drawOnFace": "draw"}, "Face.detect").get("draw", draw)
         result = self._run(frame)
         height, width = frame.shape[:2]
         self._last = [
@@ -588,9 +574,8 @@ class Face(Detector):
                 _draw_points(frame, face.keypoints, (0, 0, 255), 3)
         return self._last
 
-    def locate(
-        self, frame: np.ndarray, *, draw: bool = True, color: Color = (0, 255, 0), **legacy: Any
-    ) -> list[list[Any]]:
+    @_accepts_legacy({"drawOnFace": "draw", "drawingColor": "color"})
+    def locate(self, frame: np.ndarray, *, draw: bool = True, color: Color = (0, 255, 0)) -> list[list[Any]]:
         """Face boxes from the latest :meth:`detect` call.
 
         Args:
@@ -601,14 +586,8 @@ class Face(Detector):
         Returns:
             ``[[id, (x, y, width, height), score], ...]``, or ``[]`` when no face is visible.
         """
-        options = _translate_legacy(legacy, {"drawOnFace": "draw", "drawingColor": "color"}, "Face.locate")
-        draw = options.get("draw", draw)
-        color = options.get("color", color)
-        if self._last is None:
-            self.detect(frame, draw=False)
-        assert self._last is not None
         boxes = []
-        for i, face in enumerate(self._last):
+        for i, face in enumerate(self._detected()):
             boxes.append([i, face.box, face.score])
             if draw:
                 _draw_corner_box(frame, face.box, color)
