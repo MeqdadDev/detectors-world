@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented here. The project follows [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.0.1] - 2026-10-30
 
 ### Added
 - A documentation website with guides, an API reference and landmark maps for every detector.
